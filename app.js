@@ -1,6 +1,6 @@
 // ================= CONFIG =================
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbyiopiu30K0YvWCoYBwYyb7RuK3F27Tczg9LmWwv9pJu2Q2naywG3t2XCqsM9P7tOMP/exec',                      // isi URL Apps Web App untuk mode sungguhan
+  API_URL: 'https://script.google.com/macros/s/AKfycbyiopiu30K0YvWCoYBwYyb7RuK3F27Tczg9LmWwv9pJu2Q2naywG3t2XCqsM9P7tOMP/exec',
   STORAGE_TOKEN: 'tb_token',
   STORAGE_USER: 'tb_user',
 };
