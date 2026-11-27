@@ -11,7 +11,7 @@
 <!-- LOGIN -->
 <div id="view-login" class="view on">
   <div class="login-hero">
-    <img src="logo.svg" alt="Tim Bangun" class="login-logo">
+    <div class="login-logo-ph">TB</div>
     <h1>Tim Bangun</h1>
     <p>Absensi &amp; Manajemen Karyawan</p>
   </div>
@@ -37,6 +37,7 @@
 
 <!-- APP -->
 <div id="view-app" class="view">
+  <nav class="tabbar" id="tabbar"></nav>
 
   <!-- BERANDA -->
   <section id="tab-home" class="tab on">
@@ -45,59 +46,110 @@
         <h2 id="greet">Hallo</h2>
         <p id="today">—</p>
       </div>
-      <img src="logo.svg" alt="" class="top-logo">
+      <div class="top-badge" id="role-badge">—</div>
     </header>
 
-    <div class="banner" id="banner">
-      <div class="banner-track" id="banner-track">
-        <div class="banner-slide b1"><b>Pengumuman</b><span>Apel pagi proyek Cibubur</span><small>Senin, 30 Nov · 07.00 WIB</small></div>
-        <div class="banner-slide b2"><b>Event</b><small>Safety briefing bulanan</small></div>
-        <div class="banner-slide b3"><b>Info HR</b><small>Batas pengajuan cuti tahunan</small></div>
+    <!-- Karyawan -->
+    <div id="home-employee" class="hidden">
+      <div class="banner" id="banner">
+        <div class="banner-track" id="banner-track">
+          <div class="banner-slide b1"><b>Pengumuman</b><span>Apel pagi proyek Cibubur</span><small>Senin, 30 Nov · 07.00 WIB</small></div>
+          <div class="banner-slide b2"><b>Event</b><span>Safety briefing bulanan</span><small>Wajib untuk operasional</small></div>
+          <div class="banner-slide b3"><b>Info HR</b><span>Batas cuti tahunan</span><small>Maks 4 hari per pengajuan</small></div>
+        </div>
+        <div class="banner-dots" id="banner-dots"></div>
       </div>
-      <div class="banner-dots" id="banner-dots"></div>
+      <div class="clock-card">
+        <div class="clock" id="clock">--:--:--</div>
+        <p>Waktu Indonesia Barat</p>
+      </div>
+      <div class="card-row">
+        <div class="card half">
+          <span class="card-lbl">Jam Masuk</span>
+          <strong id="t-in" class="empty">--:--</strong>
+        </div>
+        <div class="card half">
+          <span class="card-lbl">Jam Keluar</span>
+          <strong id="t-out" class="empty">--:--</strong>
+        </div>
+      </div>
+      <button id="btn-absen" class="btn-absen">Absen Masuk</button>
+      <div class="card saldo">
+        <span class="card-lbl">Sisa Cuti Tahunan</span>
+        <div class="saldo-num"><strong id="cuti-sisa">—</strong><small>/ <span id="cuti-kuota">—</span> hari</small></div>
+      </div>
     </div>
 
-    <div class="clock-card">
-      <div class="clock" id="clock">--:--:--</div>
-      <p>Waktu Indonesia Barat</p>
-    </div>
-
-    <div class="card-row">
-      <div class="card half">
-        <span class="card-lbl">Jam Masuk</span>
-        <strong id="t-in" class="empty">--:--</strong>
+    <!-- Manajemen -->
+    <div id="home-manager" class="hidden">
+      <div class="stat-grid" id="mgr-stats">
+        <div class="stat s-blue"><strong>—</strong><span>Memuat</span></div>
       </div>
-      <div class="card half">
-        <span class="card-lbl">Jam Keluar</span>
-        <strong id="t-out" class="empty">--:--</strong>
+      <div class="sect-title">Aktivitas Terbaru</div>
+      <div class="card list" id="mgr-activity">
+        <p class="list-empty">Memuat...</p>
       </div>
-    </div>
-
-    <button id="btn-absen" class="btn-absen">Absen Sekarang</button>
-
-    <div class="card saldo">
-      <span class="card-lbl">Sisa Cuti Tahunan</span>
-      <div class="saldo-num"><strong id="cuti-sisa">0</strong><small>/ <span id="cuti-kuota">0</span> hari</small></div>
     </div>
   </section>
 
-  <!-- REKAP -->
+  <!-- MONITORING -->
+  <section id="tab-monitoring" class="tab">
+    <header class="nav-top">
+      <div><h2>Monitoring</h2><p id="mon-date">—</p></div>
+    </header>
+    <div class="stat-grid" id="mon-stats">
+      <div class="stat s-blue"><strong>—</strong><span>Memuat</span></div>
+    </div>
+    <div class="sect-title">Aktivitas Terbaru</div>
+    <div class="card list" id="mon-activity">
+      <p class="list-empty">Memuat...</p>
+    </div>
+  </section>
+
+  <!-- KELOLA -->
+  <section id="tab-kelola" class="tab">
+    <div id="kelola-menu">
+      <header class="nav-top">
+        <div><h2>Kelola</h2><p>Manajemen data</p></div>
+      </header>
+      <div class="card menu">
+        <div class="menu-row" data-sub="users"><span>Akun Karyawan</span><i>›</i></div>
+        <div class="menu-row" data-sub="positions"><span>Jabatan</span><i>›</i></div>
+        <div class="menu-row" data-sub="holidays"><span>Hari Libur</span><i>›</i></div>
+      </div>
+    </div>
+    <div id="kelola-sub" class="hidden">
+      <header class="nav-top">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="back-btn" onclick="kelolaBack()">‹</button>
+          <h2 style="font-size:20px" id="kelola-title">—</h2>
+        </div>
+      </header>
+      <div class="card list" id="kelola-list">
+        <p class="list-empty">Memuat...</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- REKAP (EMPLOYEE) -->
   <section id="tab-rekap" class="tab">
-    <header class="nav-top"><div><h2>Rekap Absensi</h2><p id="rekap-month">—</p></div></header>
+    <header class="nav-top">
+      <div><h2>Rekap Absensi</h2><p id="rekap-month">—</p></div>
+    </header>
     <div class="stat-grid">
-      <div class="stat s-green"><strong id="st-hadir">0</strong><span>Hadir</span></div>
-      <div class="stat s-amber"><strong id="st-telat">0</strong><span>Terlambat</span></div>
-      <div class="stat s-blue"><strong id="st-izin">0</strong><span>Izin</span></div>
-      <div class="stat s-red"><strong id="st-alfa">0</strong><span>Alfa</span></div>
+      <div class="stat s-green"><strong>—</strong><span>Hadir</span></div>
+      <div class="stat s-amber"><strong>—</strong><span>Terlambat</span></div>
+      <div class="stat s-blue"><strong>—</strong><span>Izin</span></div>
+      <div class="stat s-red"><strong>—</strong><span>Alfa</span></div>
     </div>
-    <div class="card list" id="rekap-list">
-      <p class="list-empty">Belum ada data absensi bulan ini.</p>
+    <div class="card list">
+      <p class="list-empty">Data detail menyusul setelah schema <code>listMyAttendance</code> dikonfirmasi.</p>
     </div>
   </section>
 
-  <!-- PENGAJUAN -->
+  <!-- AJUKAN (EMPLOYEE) -->
   <section id="tab-ajukan" class="tab">
-    <header class="nav-top"><div><h2>Pengajuan</h2><p>Izin, sakit, dan cuti tahunan</p></div></header>
+    <header class="nav-top"><div><h2>Pengajuan</h2><p>Izin, sakit, dan cuti</p></div></header>
     <div class="seg" id="seg">
       <button class="on" data-t="izin">Izin / Sakit</button>
       <button data-t="cuti">Cuti Tahunan</button>
@@ -107,23 +159,14 @@
         <label>Jenis</label>
         <select><option>Izin Pribadi</option><option>Izin Sakit</option></select>
       </div>
-      <div class="field">
-        <label>Tanggal Mulai</label>
-        <input type="date">
-      </div>
-      <div class="field">
-        <label>Tanggal Selesai</label>
-        <input type="date">
-      </div>
-      <div class="field">
-        <label>Alasan</label>
-        <textarea rows="3" placeholder="Tuliskan alasan pengajuan"></textarea>
-      </div>
+      <div class="field"><label>Tanggal Mulai</label><input type="date"></div>
+      <div class="field"><label>Tanggal Selesai</label><input type="date"></div>
+      <div class="field"><label>Alasan</label><textarea rows="3" placeholder="Tuliskan alasan"></textarea></div>
       <div class="field" id="f-lampiran">
         <label>Lampiran (surat sakit)</label>
         <button class="upload">＋ Unggah foto / dokumen</button>
       </div>
-      <button class="btn-primary">Ajukan</button>
+      <button class="btn-primary" disabled style="opacity:.6">Ajukan (menunggu schema)</button>
     </div>
   </section>
 
@@ -139,18 +182,30 @@
     <div class="card menu">
       <div class="menu-row"><span>Ubah Password</span><i>›</i></div>
       <div class="menu-row"><span>Ganti Foto Profil</span><i>›</i></div>
-      <div class="menu-row"><span>Nomor Telepon</span><b id="p-phone">—</b></div>
     </div>
     <button id="btn-logout" class="btn-danger">Keluar</button>
   </section>
+</div>
 
-  <!-- BOTTOM NAV -->
-  <nav class="tabbar" id="tabbar">
-    <button data-t="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg><span>Beranda</span></button>
-    <button data-t="rekap"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/></svg><span>Rekap</span></button>
-    <button data-t="ajukan"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg><span>Ajukan</span></button>
-    <button data-t="profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Profil</span></button>
-  </nav>
+<!-- CAMERA MODAL -->
+<div id="cam-modal" class="cam-modal">
+  <div class="cam-head">
+    <button id="cam-close" class="cam-x">✕</button>
+    <b id="cam-title">Absen Masuk</b>
+    <div style="width:32px"></div>
+  </div>
+  <div class="cam-stage">
+    <video id="cam-video" autoplay playsinline muted></video>
+    <canvas id="cam-canvas" class="hidden"></canvas>
+    <img id="cam-preview" class="hidden" alt="Hasil foto">
+    <div class="cam-chip" id="cam-gps">Mengambil lokasi...</div>
+  </div>
+  <div class="cam-foot">
+    <button id="cam-capture" class="shutter" aria-label="Ambil foto"></button>
+    <button id="cam-retake" class="btn-secondary hidden">Ulangi Foto</button>
+    <button id="cam-submit" class="btn-primary hidden" style="margin-top:14px">Kirim Absen</button>
+    <p id="cam-status" class="cam-status hidden"></p>
+  </div>
 </div>
 
 <script src="app.js"></script>
