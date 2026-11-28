@@ -22,19 +22,19 @@ function api(action, payload = {}) {
   const body = { action, token: state.token, payload };
   return fetch(ENDPOINT_URL, {
     method: 'POST',
-    mode: 'no-cors', // penting untuk CORS
-    headers: { 'Content-Type': 'application/json' },
+    // HAPUS mode: 'no-cors'
+    // GANTI Content-Type menjadi text/plain agar tidak memicu preflight CORS
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body)
   }).then(r => {
-    // no-cors response opaque -> kita parse manual
-    return r.text().then(t => {
-      try { return JSON.parse(t); } catch(e) { throw new Error('Respons tidak terbaca'); }
-    });
+    if (!r.ok) throw new Error('HTTP Error: ' + r.status);
+    return r.json(); // Langsung parse JSON karena respons sudah bisa dibaca
   }).then(res => {
     if (!res.ok) throw { code: res.error?.code, message: res.error?.message };
     return res.data;
   });
 }
+
 
 function toast(msg, type = 'ok') {
   const w = document.getElementById('toast-wrap');
