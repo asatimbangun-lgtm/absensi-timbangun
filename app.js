@@ -89,6 +89,20 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 });
 
+/* Toggle tampil/sembunyi password */
+(function initPasswordToggle() {
+  const btn = document.getElementById('toggle-pw');
+  const input = document.getElementById('login-password');
+  if (!btn || !input) return;
+  btn.addEventListener('click', () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁️';
+    btn.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Tampilkan password');
+  });
+})();
+
+
 // ===== INIT HOME =====
 function initHome() {
   const u = state.user;
