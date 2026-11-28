@@ -12,31 +12,41 @@
 <body>
   <!-- ===== LOGIN SCREEN ===== -->
   <section id="screen-login" class="screen active">
-    <div class="card login-card">
-      <img src="assets/logo.png" alt="Logo" class="login-logo" />
-      <h1 class="login-title">Absensi</h1>
-      <p class="login-sub">Masuk untuk melanjutkan</p>
-      <div id="login-error" class="msg msg-error hidden"></div>
-      <form id="login-form">
-        <div class="form-group">
-          <label for="login-username">Username</label>
-          <input id="login-username" type="text" required autocomplete="username" placeholder="Masukkan username" />
-        </div>
-        <div class="form-group">
-          <label for="login-password">Password</label>
-          <input id="login-password" type="password" required autocomplete="current-password" placeholder="Masukkan password" />
-        </div>
-        <button id="login-btn" class="btn btn-primary" type="submit">Masuk</button>
-      </form>
-      <div class="banner-slider" id="login-banner">
-        <div class="banner-track" id="banner-track">
-          <img src="assets/banner1.jpg" alt="Banner 1" class="banner-img" />
-          <img src="assets/banner2.jpg" alt="Banner 2" class="banner-img" />
-          <img src="assets/banner3.jpg" alt="Banner 3" class="banner-img" />
-        </div>
+  <div class="card login-card">
+    <img src="assets/logo.png" alt="Logo" class="login-logo" />
+    <h1 class="login-title">ABSENSI TIM BANGUN</h1>
+
+    <!-- Banner di bawah judul -->
+    <div class="banner-slider" id="login-banner">
+      <div class="banner-track" id="banner-track">
+        <img src="assets/banner1.jpg" alt="Banner 1" class="banner-img" />
+        <img src="assets/banner2.jpg" alt="Banner 2" class="banner-img" />
+        <img src="assets/banner3.jpg" alt="Banner 3" class="banner-img" />
       </div>
     </div>
-  </section>
+
+    <p class="login-sub">Masuk untuk melanjutkan</p>
+    <div id="login-error" class="msg msg-error hidden"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input id="login-username" type="text" required autocomplete="username" placeholder="Masukkan username" />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <div class="password-wrap">
+          <input id="login-password" type="password" required autocomplete="current-password" placeholder="Masukkan password" />
+          <button type="button" id="toggle-pw" class="toggle-pw" aria-label="Tampilkan password">👁️</button>
+        </div>
+      </div>
+      <button id="login-btn" class="btn btn-primary" type="submit">Masuk</button>
+    </form>
+
+    <footer class="login-footer">Asa Yantama 2026</footer>
+  </div>
+</section>
+
 
   <!-- ===== HOME SCREEN (shared) ===== -->
   <section id="screen-home" class="screen hidden">
