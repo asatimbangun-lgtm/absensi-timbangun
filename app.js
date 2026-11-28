@@ -46,9 +46,15 @@ function toast(msg, type = 'ok') {
 }
 
 function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.classList.add('hidden');
+  });
+  const el = document.getElementById(id);
+  el.classList.remove('hidden');
+  el.classList.add('active');
 }
+
 
 function showModal(id) {
   document.getElementById(id).classList.remove('hidden');
