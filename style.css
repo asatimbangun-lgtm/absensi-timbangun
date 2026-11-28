@@ -196,3 +196,42 @@ select option { background:#fff; }
   .stats-grid{grid-template-columns:1fr 1fr}
   .modal-box{padding:16px}
 }
+
+/* Tombol mata password */
+.password-wrap { position: relative; }
+.password-wrap input { padding-right: 44px; }
+.toggle-pw {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 6px;
+  color: #64748b;
+  line-height: 1;
+}
+.toggle-pw:hover { color: #1e293b; }
+
+/* Judul login */
+.login-title {
+  font-size: 1.5rem;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+/* Banner di login jadi lebih dekat ke judul */
+#login-banner { margin-top: 0; margin-bottom: 16px; }
+
+/* Footer */
+.login-footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-align: center;
+}
