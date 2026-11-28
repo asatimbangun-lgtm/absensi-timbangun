@@ -1,577 +1,776 @@
-// ============ CONFIG ============
-const CONFIG = {
-  API_URL: 'PASTE_URL_ANDA_DISINI',
-  STORAGE_TOKEN: 'tb_token',
-  STORAGE_USER: 'tb_user',
-};
-CONFIG.DEMO = !CONFIG.API_URL || CONFIG.API_URL.indexOf('PASTE') === 0;
+/* =========================================
+   ABSENSI TIM BANGUN 3.0 — script.js
+   ========================================= */
 
-const $ = (id) => document.getElementById(id);
-const DAYS = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+/* ---------- KONFIG ---------- */
+const API_URL = 'https://script.google.com/macros/s/AKfycbyiopiu30K0YvWCoYBwYyb7RuK3F27Tczg9LmWwv9pJu2Q2naywG3t2XCqsM9P7tOMP/exec';
+const STANDARD_MINUTES = 480; // 8 jam kerja
+const GEO_TIMEOUT_MS = 20000;
 
-// ============ SESSION ============
-const Session = {
-  get() { try { return JSON.parse(localStorage.getItem(CONFIG.STORAGE_USER)); } catch { return null; } },
-  set(token, user) {
-    localStorage.setItem(CONFIG.STORAGE_TOKEN, token);
-    localStorage.setItem(CONFIG.STORAGE_USER, JSON.stringify(user));
-  },
-  clear() { localStorage.removeItem(CONFIG.STORAGE_TOKEN); localStorage.removeItem(CONFIG.STORAGE_USER); },
-  token() { return localStorage.getItem(CONFIG.STORAGE_TOKEN) || ''; },
-};
-
-// ============ API ============
-async function api(action, payload = {}) {
-  if (CONFIG.DEMO) return demoApi(action, payload);
-  const body = { action, payload };
-  const token = Session.token();
-  if (token) body.token = token;
-  let res;
-  try {
-    res = await fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body),
-      redirect: 'follow',
-    });
-  } catch (e) {
-    const err = new Error('Tidak bisa menghubungi server. Cek koneksi.');
-    err.code = 'NETWORK';
-    throw err;
-  }
-  if (!res.ok) {
-    const err = new Error('HTTP ' + res.status);
-    err.code = 'HTTP';
-    throw err;
-  }
-  let data;
-  try { data = await res.json(); }
-  catch { throw Object.assign(new Error('Respon tidak valid'), { code: 'PARSE' }); }
-  if (!data.ok) {
-    const err = new Error((data.error && data.error.message) || 'Terjadi kesalahan');
-    err.code = (data.error && data.error.code) || 'ERROR';
-    throw err;
-  }
-  return data.data;
-}
-
-function demoApi(action, p) {
-  return new Promise((resolve, reject) => setTimeout(() => {
-    if (action === 'login') {
-      const map = {
-        superadmin: { name: 'Asat Bangun', role: 'SUPERADMIN' },
-        ceo: { name: 'Direktur Utama', role: 'CEO' },
-        demo: { name: 'Budi Santoso', role: 'EMPLOYEE' },
-      };
-      const u = map[p.username];
-      if (u && (p.password === 'demo12345')) {
-        resolve({ token: 'DEMO_' + Date.now(), employeeId: 'EMP_' + p.username, employeeName: u.name, systemRole: u.role, mustChangePassword: false });
-      } else reject(new Error('Username atau password salah'));
-    } else if (action === 'getLeaveBalance') {
-      resolve({ year: new Date().getFullYear(), annualQuotaDays: 12, usedDays: 4, remainingDays: 8, exists: true });
-    } else if (action === 'getDashboardSummary') {
-      resolve({
-        date: new Date().toISOString().slice(0, 10), scope: 'ALL',
-        totalActiveUsers: 47, expectedToday: 45, presentToday: 38, lateToday: 3,
-        checkedOutToday: 12, notYetCheckIn: 7, pendingLeaves: 2, pendingPermissions: 3,
-        recentActivity: [
-          { employeeName: 'Budi Santoso', type: 'CHECK_IN', at: '08:02', note: 'Proyek Cibubur' },
-          { employeeName: 'Ahmad Hidayat', type: 'CHECK_IN', at: '08:05', note: 'Proyek Bekasi' },
-          { employeeName: 'Siti Rahayu', type: 'LEAVE', at: '07:58', note: 'Izin sakit' },
-        ],
-      });
-    } else if (action === 'listHolidays') {
-      resolve({ items: [
-        { date: '2026-01-01', name: 'Tahun Baru', createdByName: 'Admin' },
-        { date: '2026-12-25', name: 'Natal', createdByName: 'Admin' },
-      ]});
-    } else if (action === 'listEmployeePositions') {
-      resolve({ items: [
-        { positionCode: 'MGR', positionName: 'Manajer', isOperational: false },
-        { positionCode: 'SPR', positionName: 'Supir', isOperational: true },
-      ]});
-    } else if (action === 'listUsers') {
-      resolve({ items: [
-        { employeeName: 'Budi Santoso', username: 'budi', systemRole: 'EMPLOYEE', accountStatus: 'ACTIVE' },
-        { employeeName: 'Asat Bangun', username: 'superadmin', systemRole: 'SUPERADMIN', accountStatus: 'ACTIVE' },
-      ]});
-    } else {
-      resolve({});
-    }
-  }, 500));
-}
-
-// ============ BANNER ============
-const Banner = {
-  idx: 0, total: 3, timer: null,
-  init() {
-    const dots = $('banner-dots');
-    if (!dots) return;
-    for (let i = 0; i < this.total; i++) {
-      const d = document.createElement('i');
-      if (i === 0) d.className = 'on';
-      dots.appendChild(d);
-    }
-    this.start();
-    const track = $('banner-track');
-    if (!track) return;
-    let x0 = null;
-    track.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; this.stop(); }, { passive: true });
-    track.addEventListener('touchend', e => {
-      if (x0 === null) return;
-      const dx = e.changedTouches[0].clientX - x0;
-      if (dx < -40) this.go(this.idx + 1);
-      else if (dx > 40) this.go(this.idx - 1);
-      else this.start();
-      x0 = null;
-    });
-  },
-  start() { this.stop(); this.timer = setInterval(() => this.go(this.idx + 1), 4000); },
-  stop() { if (this.timer) clearInterval(this.timer); },
-  go(i) {
-    this.idx = ((i % this.total) + this.total) % this.total;
-    const tr = $('banner-track');
-    const dt = $('banner-dots');
-    if (tr) tr.style.transform = 'translateX(-' + (this.idx * 100) + '%)';
-    if (dt) dt.querySelectorAll('i').forEach((d, n) => d.classList.toggle('on', n === this.idx));
-  },
+/* ---------- STATE ---------- */
+const state = {
+  token: localStorage.getItem('att_token') || '',
+  user: safeJson(localStorage.getItem('att_user')),
+  branches: [],
+  selectedBranchId: '',
+  attendance: [],
+  todayRecord: null,
+  clockTimer: null,
+  stream: null,
+  mode: null,
+  photoB64: null,
+  geo: null,
+  reasonRequired: false
 };
 
-// ============ CLOCK ============
-function tickClock() {
-  const d = new Date(), p = n => (n < 10 ? '0' : '') + n;
-  const el = $('clock');
-  if (el) el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+/* ---------- UTILS ---------- */
+function safeJson(s) {
+  try { return JSON.parse(s); } catch { return null; }
 }
 
-// ============ TABBAR PER ROLE ============
-const ROLE_TABS = {
-  EMPLOYEE:   ['home','rekap','ajukan','profil'],
-  CEO:        ['home','monitoring','profil'],
-  ADMIN:      ['home','monitoring','kelola','profil'],
-  SUPERADMIN: ['home','monitoring','kelola','profil'],
-};
-const TAB_META = {
-  home:       { label: 'Beranda', icon: '<path d="M3 12l9-9 9 9M5 10v10h14V10"/>' },
-  monitoring: { label: 'Monitoring', icon: '<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/>' },
-  kelola:     { label: 'Kelola', icon: '<path d="M12 2l9 4v6c0 5-4 9-9 10-5-1-9-5-9-10V6z"/>' },
-  rekap:      { label: 'Rekap', icon: '<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/>' },
-  ajukan:     { label: 'Ajukan', icon: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>' },
-  profil:     { label: 'Profil', icon: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>' },
-};
-
-function renderTabbar(role) {
-  const tabs = ROLE_TABS[role] || ROLE_TABS.EMPLOYEE;
-  const bar = $('tabbar');
-  bar.innerHTML = '';
-  tabs.forEach((t, i) => {
-    const btn = document.createElement('button');
-    btn.dataset.t = t;
-    if (i === 0) btn.className = 'on';
-    btn.innerHTML = '<svg viewBox="0 0 24 24">' + TAB_META[t].icon + '</svg><span>' + TAB_META[t].label + '</span>';
-    bar.appendChild(btn);
-  });
-  bar.onclick = (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    bar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
-    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
-    $('tab-' + btn.dataset.t).classList.add('on');
-  };
-}
-
-// ============ LOGIN ============
-function initLogin() {
-  $('btn-eye').onclick = () => {
-    const p = $('in-pass');
-    p.type = p.type === 'password' ? 'text' : 'password';
-  };
-  $('btn-login').onclick = doLogin;
-  $('in-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-}
-
-async function doLogin() {
-  const username = $('in-user').value.trim();
-  const password = $('in-pass').value;
-  const err = $('login-err');
-  err.classList.add('hidden'); err.textContent = '';
-  if (!username || !password) {
-    err.textContent = 'Username dan password wajib diisi.';
-    err.classList.remove('hidden'); return;
-  }
-  const btn = $('btn-login');
-  btn.disabled = true; btn.textContent = 'Memverifikasi...';
-  try {
-    const data = await api('login', { username, password });
-    Session.set(data.token, {
-      employeeId: data.employeeId,
-      employeeName: data.employeeName,
-      systemRole: data.systemRole,
-    });
-    enterApp();
-  } catch (e) {
-    err.textContent = e.message + '. Periksa kembali, atau hubungi HR.';
-    err.classList.remove('hidden');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Masuk';
-  }
-}
-
-function initLogout() {
-  $('btn-logout').onclick = async () => {
-    try { await api('logout'); } catch {}
-    Session.clear();
-    $('view-app').classList.remove('on');
-    $('view-login').classList.add('on');
-    $('in-pass').value = '';
-  };
-}
-
-// ============ APP ENTRY ============
-async function enterApp() {
-  const u = Session.get();
-  if (!u) return;
-  $('view-login').classList.remove('on');
-  $('view-app').classList.add('on');
-  $('greet').textContent = 'Hallo, ' + u.employeeName.split(' ')[0];
-  $('today').textContent = DAYS[new Date().getDay()] + ', ' + new Date().getDate() + ' ' + MONTHS[new Date().getMonth()] + ' ' + new Date().getFullYear();
-  $('role-badge').textContent = u.systemRole;
-  $('p-name').textContent = u.employeeName;
-  $('p-role').textContent = u.systemRole;
-  $('p-id').textContent = u.employeeId;
-  $('avatar').textContent = u.employeeName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  renderTabbar(u.systemRole);
-
-  const isManager = ['SUPERADMIN','ADMIN','CEO'].includes(u.systemRole);
-  $('home-employee').classList.toggle('hidden', isManager);
-  $('home-manager').classList.toggle('hidden', !isManager);
-
-  if (isManager) {
-    loadDashboard('mgr-stats', 'mgr-activity');
-    if (u.systemRole !== 'CEO') loadDashboard('mon-stats', 'mon-activity');
-    else loadDashboard('mon-stats', 'mon-activity');
-  } else {
-    Banner.init();
-    loadLeaveBalance();
-    restoreAttendanceState();
-  }
-}
-
-// ============ EMPLOYEE: LEAVE BALANCE ============
-async function loadLeaveBalance() {
-  try {
-    const b = await api('getLeaveBalance', {});
-    $('cuti-sisa').textContent = b.remainingDays;
-    $('cuti-kuota').textContent = b.annualQuotaDays;
-  } catch {}
-}
-
-// ============ MANAGER: DASHBOARD ============
-async function loadDashboard(statsId, activityId) {
-  try {
-    const d = await api('getDashboardSummary', {});
-    const el = $(statsId);
-    if (el) {
-      el.innerHTML = `
-        <div class="stat s-blue"><strong>${safe(d.totalActiveUsers)}</strong><span>Total Aktif</span></div>
-        <div class="stat s-green"><strong>${safe(d.presentToday)}</strong><span>Sudah Masuk</span></div>
-        <div class="stat s-blue"><strong>${safe(d.checkedOutToday)}</strong><span>Sudah Pulang</span></div>
-        <div class="stat s-amber"><strong>${safe(d.lateToday)}</strong><span>Terlambat</span></div>
-        <div class="stat s-red"><strong>${safe(d.notYetCheckIn)}</strong><span>Belum Absen</span></div>
-        <div class="stat s-amber"><strong>${safe((d.pendingLeaves||0)+(d.pendingPermissions||0))}</strong><span>Pending</span></div>
-      `;
-    }
-    const act = $(activityId);
-    if (act) {
-      act.innerHTML = renderActivity(d.recentActivity);
-    }
-    const md = $('mon-date');
-    if (md) md.textContent = d.date ? formatDate(d.date) : '—';
-  } catch (e) {
-    const el = $(statsId);
-    if (el) el.innerHTML = '<div class="stat s-red" style="grid-column:1/-1"><strong>!</strong><span>' + (e.message || 'Gagal memuat') + '</span></div>';
-    const act = $(activityId);
-    if (act) act.innerHTML = '<p class="list-empty">Gagal memuat data: ' + (e.message || 'error') + '</p>';
-  }
-}
-
-function renderActivity(list) {
-  if (!Array.isArray(list) || !list.length) {
-    return '<p class="list-empty">Belum ada aktivitas hari ini.</p>';
-  }
-  return list.map(it => {
-    const name = it.employeeName || it.name || '—';
-    const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    const type = it.type || '';
-    const badge = mapBadge(type);
-    return `<div class="act-row">
-      <div class="act-av">${escapeHtml(initials)}</div>
-      <div class="act-info">
-        <b>${escapeHtml(name)}</b>
-        <small>${escapeHtml(it.note||type||'Aktivitas')}</small>
-      </div>
-      <span class="badge badge-${badge.col}">${badge.label}</span>
-      <span class="act-time">${escapeHtml(it.at||'')}</span>
-    </div>`;
-  }).join('');
-}
-
-function mapBadge(type) {
-  const T = String(type).toUpperCase();
-  if (T.includes('IN') || T.includes('CHECK_IN')) return { col: 'green', label: 'Masuk' };
-  if (T.includes('OUT') || T.includes('CHECK_OUT')) return { label: 'Pulang', col: 'blue' };
-  if (T.includes('LEAVE') || T.includes('CUTI')) return { col: 'amber', label: 'Izin' };
-  if (T.includes('LATE')) return { col: 'amber', label: 'Telat' };
-  return { col: 'gray', label: 'Aktivitas' };
-}
-
-// ============ KELOLA ============
-const KELOLA_TITLES = { users: 'Akun Karyawan', positions: 'Jabatan', holidays: 'Hari Libur' };
-
-document.addEventListener('click', e => {
-  const row = e.target.closest('#kelola-menu .menu-row');
-  if (row) openKelola(row.dataset.sub);
-});
-
-async function openKelola(sub) {
-  $('kelola-menu').classList.add('hidden');
-  $('kelola-sub').classList.remove('hidden');
-  $('kelola-title').textContent = KELOLA_TITLES[sub] || sub;
-  const box = $('kelola-list');
-  box.innerHTML = '<p class="list-empty">Memuat...</p>';
-  try {
-    let items = [];
-    if (sub === 'users') items = (await api('listUsers', {})).items || [];
-    else if (sub === 'positions') items = (await api('listEmployeePositions', {})).items || [];
-    else if (sub === 'holidays') items = (await api('listHolidays', {})).items || [];
-    if (!items.length) { box.innerHTML = '<p class="list-empty">Belum ada data.</p>'; return; }
-    box.innerHTML = items.map(renderKelolaRow).join('');
-  } catch (e) {
-    box.innerHTML = '<p class="list-empty">Gagal: ' + escapeHtml(e.message) + '</p>';
-  }
-}
-
-function kelolaBack() {
-  $('kelola-menu').classList.remove('hidden');
-  $('kelola-sub').classList.add('hidden');
-}
-
-function renderKelolaRow(it) {
-  if (it.employeeName !== undefined) {
-    const ini = it.employeeName.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    const badge = it.accountStatus === 'ACTIVE' ? 'green' : 'gray';
-    return `<div class="act-row">
-      <div class="act-av">${escapeHtml(ini)}</div>
-      <div class="act-info"><b>${escapeHtml(it.employeeName)}</b><small>${escapeHtml(it.username)} · ${escapeHtml(it.systemRole||'—')}</small></div>
-      <span class="badge badge-${badge}">${escapeHtml(it.accountStatus||'—')}</span>
-    </div>`;
-  }
-  if (it.positionName !== undefined) {
-    return `<div class="act-row">
-      <div class="act-av">${escapeHtml((it.positionCode||'?').slice(0,2).toUpperCase())}</div>
-      <div class="act-info"><b>${escapeHtml(it.positionName)}</b><small>${escapeHtml(it.positionCode||'')}</small></div>
-      <span class="badge badge-${it.isOperational?'blue':'gray'}">${it.isOperational?'Operasional':'Staff'}</span>
-    </div>`;
-  }
-  if (it.date !== undefined && it.name !== undefined) {
-    return `<div class="act-row">
-      <div class="act-av">${escapeHtml(it.date.slice(8,10)||'')}</div>
-      <div class="act-info"><b>${escapeHtml(it.name)}</b><small>${escapeHtml(it.date)}</small></div>
-    </div>`;
-  }
-  return '';
-}
-
-// ============ SEG PENGAJUAN ============
-document.addEventListener('click', e => {
-  const btn = e.target.closest('#seg button');
-  if (!btn) return;
-  $('seg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
-  const isCuti = btn.dataset.t === 'cuti';
-  $('f-type').classList.toggle('hidden', isCuti);
-  $('f-lampiran').classList.toggle('hidden', isCuti);
-});
-
-// ============ CAMERA + GPS + CHECKIN ============
-const todayKey = 'attendance_' + new Date().toISOString().slice(0,10);
-const Cam = {
-  stream: null, blob: null, gps: null, submitting: false, mode: 'IN',
-  async open(mode) {
-    this.mode = mode;
-    this.blob = null;
-    this.gps = null;
-    $('cam-title').textContent = mode === 'IN' ? 'Absen Masuk' : 'Absen Keluar';
-    $('cam-status').classList.add('hidden');
-    $('cam-preview').classList.add('hidden');
-    $('cam-video').classList.remove('hidden');
-    $('cam-retake').classList.add('hidden');
-    $('cam-submit').classList.add('hidden');
-    $('cam-capture').classList.remove('hidden');
-    $('cam-modal').classList.add('on');
-    this.setGps('Mengambil lokasi...', 'warn');
-    this.getGps();
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-      $('cam-video').srcObject = this.stream;
-    } catch (e) {
-      this.setGps('Kamera tidak bisa dibuka: ' + (e.message||''), 'err');
-    }
-  },
-  close() {
-    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
-    this.stream = null;
-    $('cam-modal').classList.remove('on');
-  },
-  getGps() {
-    if (!navigator.geolocation) { this.setGps('GPS tidak tersedia di browser ini', 'err'); return; }
-    navigator.geolocation.getCurrentPosition(
-      p => {
-        this.gps = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
-        this.setGps('Lokasi OK · akurasi ' + Math.round(p.coords.accuracy) + ' m', '');
-      },
-      e => this.setGps('Lokasi gagal: ' + (e.message||'izin ditolak'), 'err'),
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
-  },
-  setGps(msg, cls) {
-    const el = $('cam-gps');
-    el.innerHTML = '<span class="dot ' + (cls||'') + '"></span>' + escapeHtml(msg);
-  },
-  async capture() {
-    const v = $('cam-video');
-    const c = $('cam-canvas');
-    const w = v.videoWidth, h = v.videoHeight;
-    if (!w || !h) return;
-    const max = 900;
-    const scale = Math.min(1, max / Math.max(w, h));
-    c.width = Math.round(w * scale);
-    c.height = Math.round(h * scale);
-    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-    this.blob = c.toDataURL('image/jpeg', 0.75);
-    $('cam-preview').src = this.blob;
-    $('cam-preview').classList.remove('hidden');
-    $('cam-video').classList.add('hidden');
-    $('cam-capture').classList.add('hidden');
-    $('cam-retake').classList.remove('hidden');
-    $('cam-submit').classList.remove('hidden');
-  },
-  retake() {
-    this.blob = null;
-    $('cam-preview').classList.add('hidden');
-    $('cam-video').classList.remove('hidden');
-    $('cam-capture').classList.remove('hidden');
-    $('cam-retake').classList.add('hidden');
-    $('cam-submit').classList.add('hidden');
-  },
-  async submit() {
-    if (!this.blob || this.submitting) return;
-    this.submitting = true;
-    $('cam-submit').disabled = true;
-    $('cam-submit').textContent = 'Mengirim...';
-    $('cam-status').classList.add('hidden');
-    try {
-      const base64 = this.blob.split(',')[1];
-      const payload = {
-        photo: base64,
-        latitude: this.gps ? this.gps.lat : null,
-        longitude: this.gps ? this.gps.lng : null,
-        type: this.mode,
-      };
-      const action = this.mode === 'IN' ? 'checkIn' : 'checkOut';
-      const res = await api(action, payload);
-      this.showStatusOk('Berhasil. ' + (res && res.message ? res.message : 'Absen tercatat.'));
-      const now = new Date();
-      const tstr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-      if (this.mode === 'IN') {
-        localStorage.setItem(todayKey, JSON.stringify({ in: tstr, out: null }));
-        $('t-in').textContent = tstr;
-        $('t-in').classList.remove('empty');
-        updateAbsenBtn();
-      } else {
-        const state = JSON.parse(localStorage.getItem(todayKey) || '{}');
-        state.out = tstr;
-        localStorage.setItem(todayKey, JSON.stringify(state));
-        $('t-out').textContent = tstr;
-        $('t-out').classList.remove('empty');
-        updateAbsenBtn();
-      }
-      setTimeout(() => this.close(), 1400);
-    } catch (e) {
-      this.showStatusErr('Backend menolak (' + e.code + '): ' + e.message);
-    } finally {
-      this.submitting = false;
-      $('cam-submit').disabled = false;
-      $('cam-submit').textContent = 'Kirim Absen';
-    }
-  },
-  showStatusOk(msg) {
-    const s = $('cam-status');
-    s.className = 'cam-status ok';
-    s.textContent = msg;
-    s.classList.remove('hidden');
-  },
-  showStatusErr(msg) {
-    const s = $('cam-status');
-    s.className = 'cam-status err';
-    s.textContent = msg;
-    s.classList.remove('hidden');
-  },
-};
-
-function restoreAttendanceState() {
-  try {
-    const st = JSON.parse(localStorage.getItem(todayKey) || '{}');
-    if (st.in) { $('t-in').textContent = st.in; $('t-in').classList.remove('empty'); }
-    if (st.out) { $('t-out').textContent = st.out; $('t-out').classList.remove('empty'); }
-    updateAbsenBtn();
-  } catch {}
-}
-
-function updateAbsenBtn() {
-  const st = JSON.parse(localStorage.getItem(todayKey) || '{}');
-  const btn = $('btn-absen');
-  if (st.out) { btn.textContent = 'Absen Selesai Hari Ini'; btn.classList.add('done'); btn.disabled = true; Cam.mode = 'DONE'; return; }
-  if (st.in) { btn.textContent = 'Absen Keluar'; btn.classList.remove('done'); btn.disabled = false; Cam.mode = 'OUT'; }
-  else { btn.textContent = 'Absen Masuk'; btn.classList.remove('done'); btn.disabled = false; Cam.mode = 'IN'; }
-}
-
-// ============ HELPERS ============
-function safe(v) { return (v === undefined || v === null) ? '—' : v; }
-function escapeHtml(s) {
+function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
 
-function formatDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso + 'T00:00:00');
-  return DAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function extractHHMM(s) {
+  if (!s) return '';
+  const m = String(s).match(/(\d{1,2}):(\d{2})/);
+  return m ? pad2(+m[1]) + ':' + m[2] : '';
 }
 
-// ============ BOOT ============
-function boot() {
-  tickClock();
-  setInterval(tickClock, 1000);
+function todayIso() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
 
-  initLogin();
-  initLogout();
+function formatDateLong(iso) {
+  if (!iso) return '—';
+  const p = String(iso).split('-');
+  if (p.length !== 3) return iso;
+  const d = new Date(+p[0], +p[1] - 1, +p[2]);
+  return isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
 
-  $('cam-close').onclick   = () => Cam.close();
-  $('cam-capture').onclick = () => Cam.capture();
-  $('cam-retake').onclick  = () => Cam.retake();
-  $('cam-submit').onclick  = () => Cam.submit();
+function formatDateShort(iso) {
+  if (!iso) return { day: '—', month: '—' };
+  const p = String(iso).split('-');
+  if (p.length !== 3) return { day: '—', month: '—' };
+  const d = new Date(+p[0], +p[1] - 1, +p[2]);
+  return { day: pad2(d.getDate()), month: d.toLocaleDateString('id-ID', { month: 'short' }) };
+}
 
-  $('btn-absen').onclick = () => {
-    if (Cam.mode === 'DONE') return;
-    Cam.open(Cam.mode === 'OUT' ? 'OUT' : 'IN');
-  };
+function formatMinutes(min) {
+  if (!min || min < 1) return '0m';
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  if (h <= 0) return m + 'm';
+  if (m === 0) return h + 'j';
+  return h + 'j ' + m + 'm';
+}
 
-  if (Session.token() && Session.get()) {
-    enterApp();
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function toast(msg, kind) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+/* ---------- API ---------- */
+async function callApi(action, payload) {
+  const body = { action, payload: payload || {} };
+  if (state.token) body.token = state.token;
+
+  let res, lastErr;
+  for (let i = 0; i < 3; i++) {
+    try {
+      res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body),
+        redirect: 'follow',
+        cache: 'no-store'
+      });
+      break;
+    } catch (e) {
+      lastErr = e;
+      const m = String((e && e.message) || e);
+      if (!/CONNECTION_CLOSED|Failed to fetch|NetworkError|Load failed/i.test(m)) throw e;
+      if (i < 2) await new Promise(r => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  if (!res) throw lastErr || new Error('Tidak dapat menghubungi server.');
+
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw new Error('Respons server tidak valid.'); }
+
+  if (json && json.ok === false) throw new Error(errMsg(json) || 'Gagal');
+  if (json && json.success === false) throw new Error(errMsg(json) || 'Gagal');
+  if (json && json.error) throw new Error(errMsg(json) || 'Gagal');
+  if (json && json.code && String(json.code).toUpperCase() !== 'OK' && json.message) throw new Error(json.message);
+
+  if (json && json.ok === true && 'data' in json) return json.data;
+  if (json && json.success === true && 'data' in json) return json.data;
+  if (json && json.data && typeof json.data === 'object' && !Array.isArray(json.data) && !('items' in json)) return json.data;
+  return json;
+}
+
+function errMsg(j) {
+  if (!j) return '';
+  if (j.error && typeof j.error === 'object') return j.error.message || j.error.msg || '';
+  if (typeof j.error === 'string') return j.error;
+  return j.message || '';
+}
+
+/* ---------- AUTH ---------- */
+function saveAuth(token, user) {
+  state.token = token;
+  state.user = user;
+  localStorage.setItem('att_token', token);
+  localStorage.setItem('att_user', JSON.stringify(user));
+}
+
+function clearAuth() {
+  state.token = '';
+  state.user = null;
+  localStorage.removeItem('att_token');
+  localStorage.removeItem('att_user');
+}
+
+function roleLabel(r) {
+  switch ((r || '').toUpperCase()) {
+    case 'SUPERADMIN': return 'Super Admin';
+    case 'ADMIN': return 'Admin';
+    case 'CEO': return 'CEO';
+    case 'EMPLOYEE': return 'Karyawan';
+    default: return r || '—';
   }
 }
 
-document.addEventListener('DOMContentLoaded', boot);
+async function doLogin(username, password) {
+  const res = await callApi('login', { username, password });
+  const user = (res && (res.user || res)) || {};
+  const token = (res && res.token) || user.token;
+  if (!token) throw new Error('Login gagal: token tidak diterima.');
+  saveAuth(token, {
+    employeeId: user.employeeId || res.employeeId || '',
+    employeeName: user.employeeName || res.employeeName || username,
+    systemRole: user.systemRole || res.systemRole || 'EMPLOYEE',
+    mustChangePassword: user.mustChangePassword === true || res.mustChangePassword === true
+  });
+  return state.user;
+}
 
+/* ---------- DATA LOADERS ---------- */
+async function loadBranches() {
+  let listAssign = [], listMaster = [];
+  try {
+    const [a, b] = await Promise.all([
+      callApi('listEmployeeBranches', {}),
+      callApi('listBranches', { status: 'ACTIVE' })
+    ]);
+    listAssign = Array.isArray(a) ? a : (a?.items || []);
+    listMaster = Array.isArray(b) ? b : (b?.items || []);
+  } catch (e) {
+    console.warn('loadBranches fallback:', e.message);
+    const onlyA = await callApi('listEmployeeBranches', {}).catch(() => []);
+    const onlyB = await callApi('listBranches', {}).catch(() => ({ items: [] }));
+    listAssign = Array.isArray(onlyA) ? onlyA : (onlyA?.items || []);
+    listMaster = Array.isArray(onlyB) ? onlyB : (onlyB?.items || []);
+  }
+  const map = {};
+  listMaster.forEach(m => { map[m.branchId] = m; });
+  state.branches = listAssign.map(a => {
+    const m = map[a.branchId] || {};
+    return {
+      id: a.id,
+      branchId: a.branchId,
+      branchName: a.branchName || m.branchName || '—',
+      isPrimary: !!a.isPrimary,
+      latitude: Number(m.latitude ?? 0),
+      longitude: Number(m.longitude ?? 0),
+      radiusMeters: Number(m.radiusMeters ?? 100),
+      address: m.address || ''
+    };
+  });
+  const primary = state.branches.find(b => b.isPrimary) || state.branches[0];
+  state.selectedBranchId = primary ? primary.branchId : '';
+}
+
+async function loadAttendance() {
+  let res;
+  try { res = await callApi('listMyAttendance', { page: 1, pageSize: 60 }); }
+  catch { res = await callApi('listMyAttendance', {}); }
+  const items = Array.isArray(res) ? res : ((res && res.items) || []);
+  state.attendance = items;
+  const today = todayIso();
+  state.todayRecord = items.find(x => String(x.attendanceDate) === today) || null;
+}
+
+/* ---------- RENDER ---------- */
+function renderHeader() {
+  const u = state.user || {};
+  document.getElementById('user-name').textContent = u.employeeName || '—';
+  document.getElementById('user-role').textContent = roleLabel(u.systemRole);
+  document.getElementById('pw-notice').hidden = !u.mustChangePassword;
+  document.getElementById('date-text').textContent = formatDateLong(todayIso());
+}
+
+function startClock() {
+  if (state.clockTimer) clearInterval(state.clockTimer);
+  const tick = () => {
+    const d = new Date();
+    document.getElementById('clock-text').textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  };
+  tick();
+  state.clockTimer = setInterval(tick, 15000);
+}
+
+function renderBranches() {
+  const cont = document.getElementById('branch-list');
+  const count = document.getElementById('branch-count');
+  if (!state.branches.length) {
+    cont.innerHTML = '<div class="empty-note" style="min-width:100%">Belum ada lokasi ditugaskan.</div>';
+    count.textContent = '0 lokasi';
+    return;
+  }
+  count.textContent = state.branches.length + ' lokasi';
+  cont.innerHTML = state.branches.map(b => {
+    const sel = b.branchId === state.selectedBranchId ? ' selected' : '';
+    const prim = b.isPrimary ? '<span class="primary-badge">Utama</span>' : '';
+    return `<button class="branch-card${sel}" data-branch="${esc(b.branchId)}">
+      <span class="emoji">📍</span>
+      <div class="info">
+        <div class="name">${esc(b.branchName)}</div>
+        <div class="meta">${prim}<span>Radius ${b.radiusMeters}m</span></div>
+      </div>
+    </button>`;
+  }).join('');
+  cont.querySelectorAll('[data-branch]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.selectedBranchId = el.getAttribute('data-branch');
+      renderBranches();
+    });
+  });
+}
+
+function renderCheckStatus() {
+  const tr = state.todayRecord;
+  const cin = tr ? extractHHMM(tr.checkInTime) : '';
+  const cout = tr ? extractHHMM(tr.checkOutTime) : '';
+  document.getElementById('checkin-display').textContent = cin || '--:--';
+  document.getElementById('checkout-display').textContent = cout || '--:--';
+
+  const btn = document.getElementById('btn-attend');
+  const label = document.getElementById('attend-label');
+
+  if (!state.branches.length) {
+    btn.disabled = true;
+    label.textContent = 'Belum ada lokasi';
+    btn.dataset.mode = '';
+    return;
+  }
+  if (!cin) {
+    btn.disabled = false;
+    label.textContent = 'Absen Masuk';
+    btn.dataset.mode = 'checkIn';
+  } else if (!cout) {
+    btn.disabled = false;
+    label.textContent = 'Absen Pulang';
+    btn.dataset.mode = 'checkOut';
+  } else {
+    btn.disabled = true;
+    label.textContent = 'Absensi Hari Ini Selesai';
+    btn.dataset.mode = '';
+  }
+}
+
+function renderStats() {
+  const month = todayIso().slice(0, 7);
+  const items = state.attendance.filter(x => String(x.attendanceDate || '').slice(0, 7) === month);
+  const totalMasuk = items.filter(x => x.checkInTime).length;
+  const totalLembur = items.reduce((a, x) => a + (Number(x.overtimeMinutes) || 0), 0);
+  const totalTelat = items.reduce((a, x) => a + (Number(x.lateMinutes) || 0), 0);
+  const totalIzin = items.filter(x => {
+    const s = String(x.attendanceStatus || '').toUpperCase();
+    return /IZIN|CUTI|SAKIT|LEAVE|PERMISSION|SICK/i.test(s);
+  }).length;
+
+  document.getElementById('stat-masuk').textContent = totalMasuk;
+  document.getElementById('stat-lembur').textContent = formatMinutes(totalLembur);
+  document.getElementById('stat-telat').textContent = formatMinutes(totalTelat);
+  document.getElementById('stat-izin').textContent = totalIzin;
+}
+
+function statusBadges(rec) {
+  const s = String(rec.attendanceStatus || '').toUpperCase();
+  const out = [];
+  if (s.includes('LATE_AND_EARLY_LEAVE')) out.push('<span class="badge b-warn">Telat · Plg Cepat</span>');
+  else {
+    if (s.includes('LATE')) out.push('<span class="badge b-warn">Terlambat</span>');
+    if (s.includes('EARLY_LEAVE')) out.push('<span class="badge b-warn">Pulang Cepat</span>');
+  }
+  if (s.includes('PRESENT') || (!s.includes('LATE') && !s.includes('EARLY') && rec.checkInTime && rec.checkOutTime)) {
+    out.push('<span class="badge b-ok">Hadir</span>');
+  }
+  if (s.includes('ABSENT') || s === 'ALFA') out.push('<span class="badge b-danger">Absen</span>');
+  if (/IZIN|LEAVE|PERMISSION/.test(s)) out.push('<span class="badge b-info">Izin</span>');
+  if (/SAKIT|SICK/.test(s)) out.push('<span class="badge b-info">Sakit</span>');
+  if (rec.reviewStatus && String(rec.reviewStatus).toUpperCase() === 'PENDING') out.push('<span class="badge b-muted">Review</span>');
+  if (rec.reviewStatus && String(rec.reviewStatus).toUpperCase() === 'REJECTED') out.push('<span class="badge b-danger">Ditolak</span>');
+  if (!out.length) out.push('<span class="badge b-muted">—</span>');
+  return out.slice(0, 2).join('');
+}
+
+function renderHistory() {
+  const cont = document.getElementById('history-list');
+  const countEl = document.getElementById('history-count');
+
+  if (!state.attendance.length) {
+    cont.innerHTML = '<div class="empty-note">Belum ada riwayat absensi.</div>';
+    countEl.textContent = '';
+    return;
+  }
+  const month = todayIso().slice(0, 7);
+  const items = state.attendance
+    .filter(x => String(x.attendanceDate || '').slice(0, 7) === month)
+    .sort((a, b) => String(b.attendanceDate).localeCompare(String(a.attendanceDate)))
+    .slice(0, 8);
+  countEl.textContent = items.length + ' hari';
+
+  cont.innerHTML = items.map(rec => {
+    const dt = formatDateShort(rec.attendanceDate);
+    const cin = extractHHMM(rec.checkInTime) || '--:--';
+    const cout = extractHHMM(rec.checkOutTime) || '--:--';
+    return `<button class="attendance-item" data-att="${esc(rec.attendanceId)}">
+      <div class="date-block">
+        <div class="day">${dt.day}</div>
+        <div class="month">${esc(dt.month)}</div>
+      </div>
+      <div class="times">
+        <span>Masuk <strong>${cin}</strong></span>
+        <span>Pulang <strong>${cout}</strong></span>
+      </div>
+      <div class="badges">${statusBadges(rec)}</div>
+    </button>`;
+  }).join('');
+
+  cont.querySelectorAll('[data-att]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-att');
+      const rec = state.attendance.find(x => x.attendanceId === id);
+      if (rec) showDetail(rec);
+    });
+  });
+}
+
+/* ---------- DETAIL MODAL ---------- */
+async function showDetail(rec) {
+  const title = document.getElementById('detail-title');
+  const content = document.getElementById('detail-content');
+
+  title.textContent = 'Absensi ' + (rec.attendanceDate ? formatDateLong(rec.attendanceDate) : '');
+  const cin = extractHHMM(rec.checkInTime) || '--:--';
+  const cout = extractHHMM(rec.checkOutTime) || '--:--';
+  const inBranch = rec.checkInBranchName || '—';
+  const outBranch = rec.checkOutBranchName || '—';
+  const inDist = rec.checkInDistanceMeters != null ? Number(rec.checkInDistanceMeters).toFixed(0) + ' m' : '—';
+  const outDist = rec.checkOutDistanceMeters != null ? Number(rec.checkOutDistanceMeters).toFixed(0) + ' m' : '—';
+
+  content.innerHTML = `
+    <div class="detail-times">
+      <div class="detail-time-card"><div class="l">Masuk</div><div class="v">${cin}</div></div>
+      <div class="detail-time-card"><div class="l">Pulang</div><div class="v">${cout}</div></div>
+    </div>
+    <div class="detail-photos">
+      <div class="photo-box" id="photo-in"><span class="photo-label">Foto Masuk</span><span>Memuat…</span></div>
+      <div class="photo-box" id="photo-out"><span class="photo-label">Foto Pulang</span><span>Memuat…</span></div>
+    </div>
+    <div class="detail-meta">
+      <div class="row"><span>Lokasi masuk</span><b>${esc(inBranch)}${rec.checkInDistanceMeters != null ? ' · ' + inDist : ''}</b></div>
+      <div class="row"><span>Lokasi pulang</span><b>${esc(outBranch)}${rec.checkOutDistanceMeters != null ? ' · ' + outDist : ''}</b></div>
+      <div class="row"><span>Telat</span><b>${formatMinutes(Number(rec.lateMinutes) || 0)}</b></div>
+      <div class="row"><span>Pulang cepat</span><b>${formatMinutes(Number(rec.earlyLeaveMinutes) || 0)}</b></div>
+      <div class="row"><span>Lembur</span><b>${formatMinutes(Number(rec.overtimeMinutes) || 0)}</b></div>
+      <div class="row"><span>Status</span><b>${esc(String(rec.attendanceStatus || '—'))}</b></div>
+      ${rec.checkInReason ? `<div class="row"><span>Alasan masuk</span><b>${esc(rec.checkInReason)}</b></div>` : ''}
+      ${rec.checkOutReason ? `<div class="row"><span>Alasan pulang</span><b>${esc(rec.checkOutReason)}</b></div>` : ''}
+      ${rec.reviewStatus ? `<div class="row"><span>Review</span><b>${esc(rec.reviewStatus)}</b></div>` : ''}
+    </div>
+  `;
+
+  openModal('modal-detail');
+
+  loadPhotoInto('photo-in', rec.checkInPhotoFileId);
+  loadPhotoInto('photo-out', rec.checkOutPhotoFileId);
+}
+
+async function loadPhotoInto(boxId, fileId) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const labelHtml = box.querySelector('.photo-label').outerHTML;
+  if (!fileId) {
+    box.innerHTML = labelHtml + '<span>Tidak ada foto</span>';
+    return;
+  }
+  try {
+    const blobUrl = await fetchPhoto(fileId);
+    box.innerHTML = labelHtml + `<img src="${blobUrl}" alt="">`;
+  } catch (e) {
+    console.warn('fetchPhoto gagal:', e);
+    box.innerHTML = labelHtml + '<span>Gagal muat foto</span>';
+  }
+}
+
+async function fetchPhoto(fileId) {
+  const body = { action: 'getPhoto', token: state.token, payload: { fileId: fileId } };
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  });
+  if (!res.ok) throw new Error('Foto tidak dapat diambil');
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+
+  if (ct.includes('application/json')) {
+    const j = await res.json();
+    const b64 = j?.data?.base64 || j?.base64 || j?.data;
+    if (typeof b64 === 'string') {
+      return 'data:' + (j?.mimeType || 'image/jpeg') + ';base64,' + b64;
+    }
+    throw new Error('Format foto tidak dikenal');
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+/* ---------- CAMERA ---------- */
+async function openCamera(mode) {
+  state.mode = mode;
+  state.photoB64 = null;
+  state.geo = null;
+  state.reasonRequired = false;
+
+  document.getElementById('camera-title').textContent = mode === 'checkIn' ? 'Absen Masuk' : 'Absen Pulang';
+  document.getElementById('cam-preview').hidden = true;
+  document.getElementById('cam-video').hidden = false;
+  document.getElementById('cam-actions-capture').hidden = false;
+  document.getElementById('cam-actions-submit').hidden = true;
+  document.getElementById('btn-capture').disabled = true;
+  document.getElementById('cam-error').hidden = true;
+  document.getElementById('reason-input').value = '';
+  document.getElementById('reason-field').hidden = true;
+
+  openModal('modal-camera');
+
+  if (mode === 'checkIn') {
+    const now = new Date();
+    const isLate = (now.getHours() * 60 + now.getMinutes()) > (8 * 60 + 15);
+    if (isLate) state.reasonRequired = true;
+  } else if (mode === 'checkOut') {
+    const tr = state.todayRecord;
+    if (tr) {
+      const cinH = extractHHMM(tr.checkInTime);
+      if (cinH) {
+        const [h, m] = cinH.split(':').map(Number);
+        const inMinutes = h * 60 + m;
+        const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+        if ((nowMin - inMinutes) < STANDARD_MINUTES) state.reasonRequired = true;
+      }
+    }
+  }
+
+  await startCamera();
+  const branch = state.branches.find(b => b.branchId === state.selectedBranchId);
+  captureGeo(branch);
+}
+
+async function startCamera() {
+  const video = document.getElementById('cam-video');
+  const err = document.getElementById('cam-error');
+  const msg = document.getElementById('cam-error-msg');
+
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+  try {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'user' }, width: { ideal: 720 }, height: { ideal: 960 } },
+        audio: false
+      });
+    } catch {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
+    state.stream = stream;
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    document.getElementById('btn-capture').disabled = false;
+    err.hidden = true;
+  } catch (e) {
+    err.hidden = false;
+    msg.textContent = String(e.message || e);
+    document.getElementById('btn-capture').disabled = true;
+  }
+}
+
+function stopCamera() {
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+}
+
+function capturePhoto() {
+  const video = document.getElementById('cam-video');
+  const preview = document.getElementById('cam-preview');
+  const canvas = document.createElement('canvas');
+  const w = video.videoWidth || 720;
+  const h = video.videoHeight || 960;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.translate(w, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  state.photoB64 = dataUrl.split(',')[1];
+
+  preview.src = dataUrl;
+  preview.hidden = false;
+  video.hidden = true;
+
+  document.getElementById('cam-actions-capture').hidden = true;
+  document.getElementById('cam-actions-submit').hidden = false;
+  document.getElementById('reason-field').hidden = !state.reasonRequired;
+  if (state.reasonRequired) {
+    document.getElementById('reason-input').focus();
+  }
+}
+
+async function retakePhoto() {
+  state.photoB64 = null;
+  document.getElementById('cam-preview').hidden = true;
+  document.getElementById('cam-video').hidden = false;
+  document.getElementById('cam-actions-capture').hidden = false;
+  document.getElementById('cam-actions-submit').hidden = true;
+  document.getElementById('reason-field').hidden = true;
+  await startCamera();
+}
+
+function captureGeo(branch) {
+  const box = document.getElementById('gps-status');
+  const text = document.getElementById('gps-text');
+  box.className = 'gps-status';
+  text.textContent = 'Mengambil lokasi…';
+
+  if (!navigator.geolocation) {
+    box.classList.add('err');
+    text.textContent = 'GPS tidak didukung browser';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      state.geo = { lat: latitude, lng: longitude, accuracy };
+      let extra = '';
+      if (branch) {
+        const d = haversine(latitude, longitude, branch.latitude, branch.longitude);
+        const inRadius = d <= branch.radiusMeters;
+        extra = ` · ${d.toFixed(0)}m ${inRadius ? 'dari' : 'di luar'} radius`;
+        if (!inRadius) state.reasonRequired = true;
+      }
+      box.classList.add('ok');
+      text.innerHTML = `<b>${latitude.toFixed(6)}, ${longitude.toFixed(6)}</b> ±${accuracy.toFixed(0)}m${esc(extra)}`;
+    },
+    (err) => {
+      box.classList.add('err');
+      const msg = (err.code === 1) ? 'Izin lokasi ditolak' :
+                  (err.code === 2) ? 'Lokasi tidak tersedia' :
+                  (err.code === 3) ? 'Timeout mengambil lokasi' : 'Gagal mengambil lokasi';
+      text.textContent = msg;
+    },
+    { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 0 }
+  );
+}
+
+/* ---------- SUBMIT ---------- */
+async function submitAttendance() {
+  const btn = document.getElementById('btn-submit');
+  const reason = document.getElementById('reason-input').value.trim();
+
+  if (!state.photoB64) { toast('Ambil foto dulu', 'err'); return; }
+  if (!state.geo) { toast('Lokasi belum tersedia, tunggu sebentar', 'err'); return; }
+  if (!state.selectedBranchId) { toast('Pilih lokasi proyek dulu', 'err'); return; }
+  if (state.reasonRequired && !reason) { toast('Alasan wajib diisi', 'err'); return; }
+
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span> Mengirim…';
+
+  try {
+    const payload = {
+      branchId: state.selectedBranchId,
+      latitude: state.geo.lat,
+      longitude: state.geo.lng,
+      photoBase64: state.photoB64
+    };
+    if (reason) payload.reason = reason;
+
+    if (state.mode === 'checkIn') {
+      await callApi('checkIn', payload);
+      toast('Absen masuk berhasil', 'ok');
+    } else {
+      await callApi('checkOut', payload);
+      toast('Absen pulang berhasil', 'ok');
+    }
+
+    closeModal('modal-camera');
+    stopCamera();
+    await refreshData();
+  } catch (e) {
+    console.error('submit error:', e);
+    toast(e.message || 'Gagal kirim absen', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+/* ---------- REFRESH ---------- */
+async function refreshData() {
+  try {
+    await Promise.all([loadBranches(), loadAttendance()]);
+    renderBranches();
+    renderCheckStatus();
+    renderStats();
+    renderHistory();
+  } catch (e) {
+    console.error('refresh error:', e);
+    toast('Gagal memuat data: ' + e.message, 'err');
+  }
+}
+
+/* ---------- ENTER HOME ---------- */
+async function enterHome() {
+  renderHeader();
+  startClock();
+  showScreen('screen-home');
+  document.getElementById('history-list').innerHTML =
+    '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  await refreshData();
+}
+
+/* ---------- EVENTS ---------- */
+function bindEvents() {
+  document.getElementById('login-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const errBox = document.getElementById('login-error');
+    errBox.hidden = true;
+    btn.disabled = true;
+    btn.textContent = 'Memproses…';
+    try {
+      await doLogin(
+        document.getElementById('login-username').value.trim(),
+        document.getElementById('login-password').value
+      );
+      await enterHome();
+    } catch (e) {
+      errBox.hidden = false;
+      errBox.textContent = e.message || 'Login gagal';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Masuk';
+    }
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    if (!confirm('Keluar dari akun?')) return;
+    clearAuth();
+    showScreen('screen-login');
+    document.getElementById('login-password').value = '';
+    if (state.clockTimer) clearInterval(state.clockTimer);
+  });
+
+  document.getElementById('btn-attend').addEventListener('click', () => {
+    const mode = document.getElementById('btn-attend').dataset.mode;
+    if (!mode) return;
+    openCamera(mode);
+  });
+
+  document.getElementById('btn-capture').addEventListener('click', capturePhoto);
+  document.getElementById('btn-retake').addEventListener('click', retakePhoto);
+  document.getElementById('btn-submit').addEventListener('click', submitAttendance);
+
+  document.querySelectorAll('[data-close]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-close');
+      if (id === 'modal-camera') stopCamera();
+      closeModal(id);
+    });
+  });
+
+  document.querySelectorAll('.modal').forEach(m => {
+    m.addEventListener('click', (ev) => {
+      if (ev.target === m) {
+        if (m.id === 'modal-camera') stopCamera();
+        closeModal(m.id);
+      }
+    });
+  });
+}
+
+/* ---------- INIT ---------- */
+async function init() {
+  bindEvents();
+  if (state.token && state.user) {
+    try {
+      await enterHome();
+    } catch (e) {
+      console.warn('Auto-login gagal:', e.message);
+      clearAuth();
+      showScreen('screen-login');
+    }
+  } else {
+    showScreen('screen-login');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
